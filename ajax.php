@@ -22,7 +22,7 @@ if ($action === 'like' && !empty($_POST['id'])) {
         $row = $postObj->getPostById($id);
         echo json_encode(['status' => 'ok', 'likes' => (int)$row['likes']]);
     } else {
-        echo json_encode(['status' => 'error']);
+        echo json_encode(['status' => 'error', 'message' => 'Failed to like']);
     }
     exit;
 }
@@ -34,7 +34,7 @@ if ($action === 'dislike' && !empty($_POST['id'])) {
         $row = $postObj->getPostById($id);
         echo json_encode(['status' => 'ok', 'dislikes' => (int)$row['dislikes']]);
     } else {
-        echo json_encode(['status' => 'error']);
+        echo json_encode(['status' => 'error', 'message' => 'Failed to dislike']);
     }
     exit;
 }
@@ -45,10 +45,17 @@ if ($action === 'add_post') {
 
     // uploads
     $uploadDir = __DIR__ . '/uploads/';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
     $imagePath = null;
     if (!empty($_FILES['image']['name'])) {
+        // Basic image validation
+        $check = @getimagesize($_FILES['image']['tmp_name']);
+        if ($check === false) {
+            echo json_encode(['status' => 'error', 'message' => 'File is not a valid image']);
+            exit;
+        }
+
         $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, $allowed)) {
@@ -59,7 +66,14 @@ if ($action === 'add_post') {
             echo json_encode(['status' => 'error', 'message' => 'File too large (max 5MB)']);
             exit;
         }
-        $filename = time() . '_' . preg_replace("/[^A-Za-z0-9\-_\.]/", '', basename($_FILES['image']['name']));
+
+        // create a secure random filename
+        try {
+            $random = bin2hex(random_bytes(8));
+        } catch (Exception $e) {
+            $random = time() . '_' . mt_rand(1000,9999);
+        }
+        $filename = $random . '.' . $ext;
         $target = $uploadDir . $filename;
         if (move_uploaded_file($_FILES['image']['tmp_name'], $target)) {
             $imagePath = 'uploads/' . $filename;
@@ -69,10 +83,8 @@ if ($action === 'add_post') {
         }
     }
 
-    $ok = $postObj->addPost($uid, $description, $imagePath);
-    if ($ok) {
-        // return the newly created post (fetch last inserted id)
-        $newId = $postObj->db->insert_id;
+    $newId = $postObj->addPost($uid, $description, $imagePath);
+    if ($newId !== false) {
         $newPost = $postObj->getPostById($newId);
         // attach user fields
         $user = $userObj->getById($uid);
@@ -80,7 +92,7 @@ if ($action === 'add_post') {
         $newPost['profile_pic'] = $user['profile_pic'];
         echo json_encode(['status' => 'ok', 'post' => $newPost]);
     } else {
-        echo json_encode(['status' => 'error']);
+        echo json_encode(['status' => 'error', 'message' => 'Failed to create post']);
     }
     exit;
 }
@@ -91,7 +103,7 @@ if ($action === 'delete_post' && !empty($_POST['id'])) {
     if ($postObj->deletePost($id, $uid)) {
         echo json_encode(['status' => 'ok']);
     } else {
-        echo json_encode(['status' => 'error']);
+        echo json_encode(['status' => 'error', 'message' => 'Failed to delete post']);
     }
     exit;
 }
@@ -103,10 +115,16 @@ if ($action === 'update_profile') {
 
     // uploads (profile pic)
     $uploadDir = __DIR__ . '/uploads/';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
     $profilePicPath = null;
     if (!empty($_FILES['profile_pic']['name'])) {
+        $check = @getimagesize($_FILES['profile_pic']['tmp_name']);
+        if ($check === false) {
+            echo json_encode(['status' => 'error', 'message' => 'Profile file is not a valid image']);
+            exit;
+        }
+
         $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         $ext = strtolower(pathinfo($_FILES['profile_pic']['name'], PATHINFO_EXTENSION));
         if (!in_array($ext, $allowed)) {
@@ -117,7 +135,13 @@ if ($action === 'update_profile') {
             echo json_encode(['status' => 'error', 'message' => 'Profile file too large (max 5MB)']);
             exit;
         }
-        $filename = time() . '_' . preg_replace("/[^A-Za-z0-9\-_\.]/", '', basename($_FILES['profile_pic']['name']));
+
+        try {
+            $random = bin2hex(random_bytes(8));
+        } catch (Exception $e) {
+            $random = time() . '_' . mt_rand(1000,9999);
+        }
+        $filename = $random . '.' . $ext;
         $target = $uploadDir . $filename;
         if (move_uploaded_file($_FILES['profile_pic']['tmp_name'], $target)) {
             $profilePicPath = 'uploads/' . $filename;
@@ -134,7 +158,7 @@ if ($action === 'update_profile') {
         $_SESSION['user'] = $updated;
         echo json_encode(['status' => 'ok', 'user' => $updated]);
     } else {
-        echo json_encode(['status' => 'error']);
+        echo json_encode(['status' => 'error', 'message' => 'Failed to update profile']);
     }
     exit;
 }
