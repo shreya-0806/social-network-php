@@ -1,4 +1,3 @@
-<?php
 class Database {
     private $host = 'localhost';
     private $db   = 'social_network';
@@ -14,4 +13,3 @@ class Database {
         $this->conn->set_charset('utf8mb4');
     }
 }
-?>
