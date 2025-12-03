@@ -8,10 +8,14 @@ class Post {
         $this->db = (new Database())->conn;
     }
 
+    // Returns inserted post ID (int) on success, or false on failure
     public function addPost($user_id, $desc, $image) {
         $stmt = $this->db->prepare("INSERT INTO posts(user_id, description, image) VALUES(?,?,?)");
         $stmt->bind_param("iss", $user_id, $desc, $image);
-        return $stmt->execute();
+        if ($stmt->execute()) {
+            return (int)$this->db->insert_id;
+        }
+        return false;
     }
 
     public function getPostsByUser($user_id) {
